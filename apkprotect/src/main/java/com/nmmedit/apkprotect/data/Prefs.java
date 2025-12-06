@@ -13,14 +13,25 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 public class Prefs {
-    public static final String CONFIG_PATH = new File(FileUtils.getHomePath(), "tools/" + (OsDetector.isWindows() ? "config-windows.json" : "config.json")).getAbsolutePath();
+    public static String CONFIG_WINDOWS_NAME = "config-windows.json";
+    public static String VMSRC_NAME = "vmsrc.zip";
+//    public static String CONFIG_PATH = new File(FileUtils.getHomePath(), "tools/" + (OsDetector.isWindows() ? CONFIG_WINDOWS_NAME : "config.json")).getAbsolutePath();
+
+    public static String getConfigPath() {
+        return new File(
+                FileUtils.getHomePath(),
+                "tools/" + (OsDetector.isWindows() ? CONFIG_WINDOWS_NAME : "config.json")
+        ).getAbsolutePath();
+    }
+
 
     public static Config config() {
+        String CONFIG_PATH = getConfigPath();
         final File configFile = new File(CONFIG_PATH);
         if (!configFile.exists()) {
             configFile.getParentFile().mkdirs();
             try (
-                    final InputStream inputStream = Prefs.class.getResourceAsStream("/" + (OsDetector.isWindows() ? "config-windows.json" : "config.json"));
+                    final InputStream inputStream = Prefs.class.getResourceAsStream("/" + (OsDetector.isWindows() ? CONFIG_WINDOWS_NAME : "config.json"));
                     final FileOutputStream outputStream = new FileOutputStream(configFile);
             ) {
                 FileUtils.copyStream(inputStream, outputStream);
@@ -28,6 +39,7 @@ public class Prefs {
                 e.printStackTrace();
             }
         }
+        System.out.println("config-windows.json的路径是"+configFile.getAbsolutePath());
         GsonBuilder builder = new GsonBuilder();
         Gson gson = builder.create();
         try {
@@ -68,11 +80,13 @@ public class Prefs {
     }
 
     public static String cmakePath() {
+        System.out.println("ndk_path" + config().environment.cmake_path);
         return config().environment.cmake_path;
     }
 
 
     public static String ndkPath() {
+        System.out.println("ndk_path" + config().environment.ndk_path);
         return config().environment.ndk_path;
     }
 

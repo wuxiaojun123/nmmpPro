@@ -1,6 +1,7 @@
 package com.nmmedit.apkprotect.util;
 
 import com.nmmedit.apkprotect.BuildNativeLib;
+import com.nmmedit.apkprotect.data.Prefs;
 import com.nmmedit.apkprotect.dex2c.converter.instructionrewriter.InstructionRewriter;
 import com.nmmedit.apkprotect.sign.ApkVerifyCodeGenerator;
 
@@ -81,18 +82,19 @@ public class CmakeUtils {
 
 
     public static void generateCSources(File srcDir, InstructionRewriter instructionRewriter) throws IOException {
-        final File vmsrcFile = new File(FileUtils.getHomePath(), "tools/vmsrc.zip");
+        final File vmsrcFile = new File(FileUtils.getHomePath(), "tools/"+ Prefs.VMSRC_NAME);
         if (!vmsrcFile.exists()) {
             //警告：如果外部源码存在不会复制内部vmsrc.zip出去，需要删除外部源码文件才能保证vmsrc.zip正确更新
             vmsrcFile.getParentFile().mkdirs();
             //copy vmsrc.zip to external directory
             try (
-                    InputStream inputStream = CmakeUtils.class.getResourceAsStream("/vmsrc.zip");
+                    InputStream inputStream = CmakeUtils.class.getResourceAsStream("/"+Prefs.VMSRC_NAME);
                     final FileOutputStream outputStream = new FileOutputStream(vmsrcFile);
             ) {
                 FileUtils.copyStream(inputStream, outputStream);
             }
         }
+        System.out.println("使用的vmsrc.zip的名字是"+vmsrcFile.getAbsolutePath());
         final List<File> cSources = ApkUtils.extractFiles(vmsrcFile, ".*", srcDir);
 
         //处理指令及apk验证,生成新的c文件
