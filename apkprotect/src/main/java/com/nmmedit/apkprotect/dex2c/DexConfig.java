@@ -4,7 +4,8 @@ import com.google.common.collect.HashMultimap;
 import com.nmmedit.apkprotect.dex2c.converter.JniCodeGenerator;
 import com.nmmedit.apkprotect.util.RandomUtils;
 
-import org.jf.dexlib2.iface.Method;
+
+import com.android.tools.smali.dexlib2.iface.Method;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -26,6 +27,7 @@ public class DexConfig {
     //jnicodegenerator 处理完成后,缓存已处理的类及方法
     private Set<String> handledNativeClasses;
     private Map<String, Integer> nativeMethodOffsets;
+//    private Opcodes opcodes;
 
     public DexConfig(File outputDir, String dexFileName) {
         this.outputDir = outputDir;
@@ -81,6 +83,14 @@ public class DexConfig {
         handledNativeClasses = codeGenerator.getHandledNativeClasses();
         nativeMethodOffsets = codeGenerator.getNativeMethodOffsets();
     }
+
+//    public Opcodes getOpcodes() {
+//        return opcodes;
+//    }
+
+//    public void setOpcodes(Opcodes opcodes) {
+//        this.opcodes = opcodes;
+//    }
 
 
     public void setShellMethods(HashMultimap<String, List<? extends Method>> shellMethods) {

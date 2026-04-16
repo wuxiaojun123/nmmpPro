@@ -1,0 +1,194 @@
+CoreComponentFactory 崩溃修复说明
+================================
+
+问题现象
+--------
+加固后的 APK 启动时崩溃，典型日志如下：
+
+1. `java.lang.ClassNotFoundException: Didn't find class "androidx.core.app.CoreComponentFactory"`
+2. `Unable to instantiate application ... ClassNotFoundException: Didn't find class "com.xxx.xxx"`
+
+这类崩溃发生在应用绑定进程早期，也就是 `LoadedApk.createAppFactory()` / `LoadedApk.makeApplication()` 阶段。
+
+
+根因分析
+--------
+这个项目原本在 dex2c 完成后，会把处理后的 shell dex 重新合并、重新写回多个 `classes*.dex`。
+
+启动阶段必须优先可达的类有：
+
+1. `androidx.core.app.CoreComponentFactory`
+2. manifest 里的 `android:appComponentFactory`
+3. manifest 里的 `android:name` 对应的 `Application`
+4. `Application` 的父类链
+
+如果这些类没有被放到首批可加载的 dex，或者在重新拆分 dex 时被丢失，就会在系统创建 `AppComponentFactory` 或 `Application` 时直接报 `ClassNotFoundException`。
+
+我排查后发现这里实际上有两个问题叠加：
+
+1. 项目里虽然预留了 `mainDexClassTypeSet`，但实际没有把启动链类收集进去，等于这套逻辑没真正生效。
+2. 旧的 dex 重组逻辑在跨多个 dex 回写时，`DexPool` 状态传递不稳定，存在把部分 class 漏写到最终 dex 的风险。启动类正好最容易在这里中招。
+
+
+我做了什么修改
+--------------
+这次没有继续硬改旧的 `ApkProtect` 主实现，而是新增了一套修复版实现：
+
+文件：
+`apkprotect/src/main/java/com/nmmedit/apkprotect/ApkProtectV2.java`
+
+并把入口切到了新实现：
+
+1. `src/main/java/com/nmmedit/protect/ApkMain.java`
+2. `src/main/java/com/nmmedit/protect/TestApk.java`
+3. `apkprotect/src/main/java/com/nmmedit/apkprotect/aab/AabProtect.java`
+
+
+修复逻辑 1：从 manifest 提取启动链类
+-----------------------------------
+我在
+`apkprotect/src/main/java/com/nmmedit/apkprotect/andres/AxmlEdit.java`
+里增加了：
+
+1. `getAppComponentFactory(byte[] manifestBytes)`
+2. 通用的属性读取方法 `getAttributeValue(...)`
+
+这样就能同时拿到：
+
+1. `<application android:name="...">`
+2. `<application android:appComponentFactory="...">`
+
+对应逻辑在 `ApkProtectV2.collectStartupClasses(...)`：
+
+1. 读取 manifest 里的 `Application`
+2. 读取 manifest 里的 `appComponentFactory`
+3. 自动处理相对类名：
+   - `.MyApp` -> `包名 + .MyApp`
+   - `MyApp` -> `包名 + .MyApp`
+   - 完整类名则原样保留
+4. 收集 `Application` 的继承链
+5. 收集 `AppComponentFactory` 的继承链
+6. 如果存在，就额外把
+   - `androidx.core.app.CoreComponentFactory`
+   - `android.support.v4.app.CoreComponentFactory`
+   加入启动保护集合
+
+这样做的目的很直接：
+系统在真正创建应用时，先用到谁，就先把谁锁定到前面的 dex。
+
+
+修复逻辑 2：强制启动链类优先写入 dex
+-----------------------------------
+旧实现里虽然有 `mainDexClassTypeSet`，但没有真正完成“先写启动类，再写其他类”的稳定流程。
+
+新实现 `ApkProtectV2.injectInstructionAndWriteToFile(...)` 改成了两阶段写入：
+
+第一阶段：
+先把 `mainDexClassTypeSet` 里的类写入当前 dex
+
+第二阶段：
+再把其他 shell dex 类继续顺序写入
+
+对应辅助方法：
+`internShellDexClasses(...)`
+
+逻辑是：
+
+1. 如果某个类属于启动保护集合，就在第一轮优先写入
+2. 其余类放第二轮
+3. 每当 `DexPool` 接近上限，就立刻落盘生成一个 `classes*.dex`
+4. 继续用新的 `DexPool` 写后续类
+
+这能保证：
+启动阶段必须可达的类总是被优先放进前面的 dex，而不是被后面的普通业务类“挤走”。
+
+
+修复逻辑 3：重写 dex 合并/回写流程，避免漏类
+-------------------------------------------
+原来的实现存在这样的问题：
+
+1. 先尝试把 main dex 类注入
+2. 再对每个 dex 调 `Dex2c.injectCallRegisterNativeInsns(...)`
+3. 中间 `lastDexPool` 的传递和落盘时机不稳定
+4. 多 dex 场景下可能把部分 class 写漏
+
+这也是为什么会出现：
+
+1. `CoreComponentFactory` 找不到
+2. 自定义 `Application` 也找不到
+
+因为它们都属于启动早期类，一旦漏写就立即崩。
+
+新实现里我自己接管了 shell dex 的重新写出流程，不再依赖原来那套不稳定的跨 dex 合并方式：
+
+1. 按配置逐个读 shell dex
+2. 对每个 class 手动调用 `internClass(...)`
+3. 对已做 dex2c 的类，包装成 `RegisterNativesCallerClassDef`
+4. 对普通类，直接写入
+5. `DexPool` 溢出时立即落盘
+6. 最后如果还有未落盘内容，再补一个最终 dex
+
+这样处理后，class 是否进入最终 dex 是确定的，不再依赖旧逻辑里“返回多个 pool 再猜最后状态”的写法。
+
+
+修复逻辑 4：继续把 NativeUtil 注入主 dex
+--------------------------------------
+在完成 shell dex 重写之后，仍然保留原来的思路：
+
+`internNativeUtilClassDef(...)`
+
+会把 register natives 需要的工具类注入到主 dex。
+
+这里我也顺手修正了一个细节：
+
+1. 新建 `DexPool` 时不再用固定默认 `Opcodes`
+2. 而是跟随主 dex 本身的 `opcodes`
+
+这样能减少不必要的兼容性风险。
+
+
+为什么这样能修好 CoreComponentFactory 崩溃
+----------------------------------------
+因为系统启动顺序决定了：
+
+1. 先解析并创建 `AppComponentFactory`
+2. 再创建 `Application`
+
+如果 `CoreComponentFactory` / `appComponentFactory` / `Application` 任意一个类不在首批可加载 dex 中，或者在重写 dex 时丢失，就一定会崩。
+
+这次修复的核心就是两句：
+
+1. 把启动链类先找出来
+2. 把这些类优先、稳定地写进前面的 dex
+
+所以最终效果就是：
+
+1. `androidx.core.app.CoreComponentFactory` 不再丢
+2. manifest 中声明的自定义 `Application` 不再丢
+3. `Application` 父类链也一起保留
+4. 启动阶段不再因为 dex 重排导致 `ClassNotFoundException`
+
+
+这次实际涉及的关键文件
+----------------------
+1. `apkprotect/src/main/java/com/nmmedit/apkprotect/andres/AxmlEdit.java`
+   新增读取 `appComponentFactory`
+
+2. `apkprotect/src/main/java/com/nmmedit/apkprotect/ApkProtectV2.java`
+   新增完整修复版 APK 加固实现
+
+3. `src/main/java/com/nmmedit/protect/ApkMain.java`
+   主入口切换到 `ApkProtectV2`
+
+4. `src/main/java/com/nmmedit/protect/TestApk.java`
+   测试入口切换到 `ApkProtectV2`
+
+5. `apkprotect/src/main/java/com/nmmedit/apkprotect/aab/AabProtect.java`
+   AAB 处理切换到 `ApkProtectV2`
+
+
+一句话总结
+----------
+不是单纯“排除 CoreComponentFactory”就修好了，而是：
+
+我把启动链类显式识别出来，并重写了 dex 回写顺序和合并流程，确保这些启动期类一定被稳定写入前面的 dex，避免系统在创建 `AppComponentFactory` 和 `Application` 时找不到类。

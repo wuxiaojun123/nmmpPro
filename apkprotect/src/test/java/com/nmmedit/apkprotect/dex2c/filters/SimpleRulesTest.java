@@ -1,10 +1,9 @@
 package com.nmmedit.apkprotect.dex2c.filters;
 
 import junit.framework.TestCase;
-import org.jf.dexlib2.Opcodes;
-import org.jf.dexlib2.dexbacked.DexBackedClassDef;
-import org.jf.dexlib2.dexbacked.DexBackedDexFile;
-import org.jf.dexlib2.dexbacked.DexBackedMethod;
+import com.android.tools.smali.dexlib2.dexbacked.DexBackedClassDef;
+import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile;
+import com.android.tools.smali.dexlib2.dexbacked.DexBackedMethod;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -14,7 +13,7 @@ public class SimpleRulesTest extends TestCase {
 
     public void testParse() throws IOException {
         final SimpleRules ruleReader = new SimpleRules();
-        final DexBackedDexFile dexFile = DexBackedDexFile.fromInputStream(Opcodes.getDefault(),
+        final DexBackedDexFile dexFile = DexBackedDexFile.fromInputStream(null,
                 new BufferedInputStream(SimpleRulesTest.class.getResourceAsStream("/classes2.dex")));
         ruleReader.parse(new StringReader(
                 "class * extends android.app.Activity\n" +

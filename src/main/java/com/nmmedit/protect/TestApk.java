@@ -1,7 +1,7 @@
 package com.nmmedit.protect;
 
 import com.nmmedit.apkprotect.ApkFolders;
-import com.nmmedit.apkprotect.ApkProtect;
+import com.nmmedit.apkprotect.ApkProtectV2;
 import com.nmmedit.apkprotect.deobfus.MappingReader;
 import com.nmmedit.apkprotect.dex2c.converter.ClassAnalyzer;
 import com.nmmedit.apkprotect.dex2c.converter.instructionrewriter.RandomInstructionRewriter;
@@ -23,9 +23,9 @@ public class TestApk {
     public static void main(String[] args) {
 
         try {
-            String aabFilePath = "G:\\jiagu\\vmp\\app-release.apk";
-            String mappingFilePath = "G:\\jiagu\\vmp\\mapping.txt";
-            String ruleFilePath = "G:\\jiagu\\vmp\\rules.txt";
+            String aabFilePath = "G:\\jiagu\\vmpTest\\duplicated-app_167_build_winsor_02_17_.apk";
+            String mappingFilePath = "G:\\jiagu\\vmpTest\\mapping.txt";
+            String ruleFilePath = "G:\\jiagu\\vmpTest\\rules_oppo_ndk21.txt";
 
 
             final File apk = new File(aabFilePath);
@@ -54,7 +54,7 @@ public class TestApk {
             final ApkFolders apkFolders = new ApkFolders(apk, outDir);
 
 
-            final ApkProtect apkProtect = new ApkProtect.Builder(apkFolders)
+            final ApkProtectV2 apkProtect = new ApkProtectV2.Builder(apkFolders)
                     .setInstructionRewriter(new RandomInstructionRewriter())
                     .setFilter(filterConfig)
                     .setClassAnalyzer(classAnalyzer)

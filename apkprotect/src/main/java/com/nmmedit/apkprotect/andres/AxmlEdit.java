@@ -26,6 +26,25 @@ public class AxmlEdit {
         }
         return "";
     }
+
+    @Nonnull
+    public static String getAppComponentFactory(@Nonnull byte[] manifestBytes) {
+        ResourceFile file = new ResourceFile(manifestBytes);
+        for (Chunk chunk : file.getChunks()) {
+            if (chunk instanceof XmlChunk) {
+                XmlChunk xmlChunk = (XmlChunk) chunk;
+                for (Chunk subChunk : xmlChunk.getChunks().values()) {
+                    if (subChunk instanceof XmlStartElementChunk) {
+                        XmlStartElementChunk startElementChunk = (XmlStartElementChunk) subChunk;
+                        if (startElementChunk.getName().equals("application")) {
+                            return getAttributeValue(startElementChunk, "appComponentFactory");
+                        }
+                    }
+                }
+            }
+        }
+        return "";
+    }
     @Nonnull
     public static int  getMinSdk(@Nonnull byte[] manifestBytes) {
         ResourceFile file = new ResourceFile(manifestBytes);
@@ -118,10 +137,15 @@ public class AxmlEdit {
     //得到application 对应的class name
     @Nonnull
     private static String getApplicationName(@Nonnull XmlStartElementChunk startElement) {
+        return getAttributeValue(startElement, "name");
+    }
+
+    @Nonnull
+    private static String getAttributeValue(@Nonnull XmlStartElementChunk startElement, @Nonnull String attributeName) {
         List<XmlAttribute> attributes = startElement.getAttributes();
         for (XmlAttribute attribute : attributes) {
             ResourceValue typedValue = attribute.typedValue();
-            if (attribute.name().equals("name") &&
+            if (attribute.name().equals(attributeName) &&
                     typedValue.type() == ResourceValue.Type.STRING) {
                 return attribute.rawValue();
             }

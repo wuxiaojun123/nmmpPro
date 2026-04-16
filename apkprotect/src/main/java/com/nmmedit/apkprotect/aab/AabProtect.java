@@ -1,7 +1,7 @@
 package com.nmmedit.apkprotect.aab;
 
 import com.android.zipflinger.*;
-import com.nmmedit.apkprotect.ApkProtect;
+import com.nmmedit.apkprotect.ApkProtectV2;
 import com.nmmedit.apkprotect.BuildNativeLib;
 import com.nmmedit.apkprotect.aab.proto.ProtoUtils;
 import com.nmmedit.apkprotect.dex2c.Dex2c;
@@ -96,7 +96,7 @@ public class AabProtect {
             //static {
             //    NativeUtils.initClass(0);
             //}
-            final List<File> outDexFiles = new ArrayList<>(ApkProtect.injectInstructionAndWriteToFile(
+            final List<File> outDexFiles = new ArrayList<>(ApkProtectV2.injectInstructionAndWriteToFile(
                     globalConfig,
                     mainDexClassTypeSet,
                     60000,
@@ -107,7 +107,7 @@ public class AabProtect {
             File mainDex = outDexFiles.get(0);
 
 
-            final File newMainDex = ApkProtect.internNativeUtilClassDef(
+            final File newMainDex = ApkProtectV2.internNativeUtilClassDef(
                     mainDex,
                     globalConfig, BuildNativeLib.NMMP_NAME);
             //替换为新的dex
